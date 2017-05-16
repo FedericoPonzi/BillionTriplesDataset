@@ -1,4 +1,6 @@
 *.class
+assets/btc*
+assets/000-*
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
