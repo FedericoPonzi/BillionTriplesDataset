@@ -18,10 +18,85 @@ public class RDFStatement implements WritableComparable<RDFStatement>
 {
     private static final Log LOG = LogFactory.getLog(RDFStatement.class);
 
+    public static final String REGEX = "(?<subject>\\<[^\\>]+\\>|[a-zA-Z0-9\\_\\:]+) (?<predicate>\\<[^\\ ]+\\>) (?<object>\\<[^\\>]+\\>|\\\".*\\\"|[a-zA-Z0-9\\_\\:]+|\\\".*\\>) (?<source>\\<[^\\>]+\\> )?\\.";
+    private static final Pattern PATTERN = Pattern.compile(REGEX);
+
+    private Text subject;
+    private Text predicate;
+    private Text object;
+    private Text context;
+    private Matcher matcher;
+
+    public RDFStatement(){
+        subject = new Text();
+        predicate = new Text();
+        object = new Text();
+        context = new Text();
+    }
+
+    public boolean updateFromLine(String line)
+    {
+        Matcher matcher = PATTERN.matcher(line);
+        if (matcher.matches())
+        {
+            setAll(matcher.group(1), matcher.group(2), matcher.group(3), matcher.group(4));
+            return true;
+        }
+        else
+        {
+            LOG.error("Can't correctly parse this line : '" + line + "'");
+        }
+        return false;
+    }
+
+    public void setAll(String subject, String predicate,String object, String context)
+    {
+
+        this.subject = new Text(subject);
+        this.predicate = new Text(predicate);
+        this.object = new Text(object);
+        this.context = context == null ? new Text() : new Text(context);
+    }
+
+    public void copyFrom(RDFStatement other)
+    {
+        subject = other.subject;
+        predicate = other.predicate;
+        object = other.object;
+        context = other.context;
+    }
+    @Override public boolean equals(Object obj)
+    {
+        if(obj instanceof RDFStatement)
+        {
+            RDFStatement o = (RDFStatement) obj;
+            return o.subject.equals(subject) && o.predicate.equals(subject) && o.object.equals(object);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return subject.hashCode();
+    }
 
     @Override public int compareTo(RDFStatement o)
     {
-        return o.subject.equals(subject) && o.predicate.equals(subject) && o.object.equals(object) ? 0 : 1;
+        if(o.subject.compareTo(subject) != 0)
+        {
+            return o.subject.compareTo(subject);
+        }
+        if(o.predicate.compareTo(predicate) != 0)
+        {
+            return o.predicate.compareTo(predicate);
+        }
+        if(o.object.compareTo(object) != 0)
+        {
+            return o.object.compareTo(object);
+        }
+        return 0;
+
     }
 
     @Override public void write(DataOutput out) throws IOException
@@ -29,6 +104,7 @@ public class RDFStatement implements WritableComparable<RDFStatement>
         subject.write(out);
         predicate.write(out);
         object.write(out);
+        context.write(out);
     }
 
     @Override public void readFields(DataInput in) throws IOException
@@ -36,71 +112,15 @@ public class RDFStatement implements WritableComparable<RDFStatement>
         subject.readFields(in);
         predicate.readFields(in);
         object.readFields(in);
+        context.readFields(in);
     }
-
-    private Text subject;
-    private Text predicate;
-    private Text object;
-    private Text context;
-
-    public static final String regex = "(?<subject>\\<[^\\>]+\\>|[a-zA-Z0-9\\_\\:]+) (?<predicate>\\<[^\\ ]+\\>) (?<object>\\<[^\\>]+\\>|\\\".*\\\"|[a-zA-Z0-9\\_\\:]+|\\\".*\\>) (?<source>\\<[^\\>]+\\> )?\\.";
-
-    public static RDFStatement createFromLine(String line)
+    @Override public String toString()
     {
-        RDFStatement ret = null;
-        Pattern PATTERN = Pattern.compile(regex);
-        Matcher matcher = PATTERN.matcher(line);
-
-            if (matcher.matches())
-            {
-                ret = new RDFStatement(matcher.group(1), matcher.group(2), matcher.group(3));
-            }
-            else
-            {
-                LOG.error("Can't correctly parse this line : '" + line + "'");
-            }
-        return ret;
-    }
-    public RDFStatement(String subject, String predicate, String object)
-    {
-        this(subject, predicate, object, null);
-    }
-    public RDFStatement(String subject, String predicate,String object, String context)
-    {
-
-        this.subject = new Text(subject);
-        this.predicate = new Text(predicate);
-        this.object = new Text(object);
-        this.context =  context == null? new Text() : new Text(context);
-    }
-
-    public void setPredicate(Text predicate)
-    {
-        this.predicate = predicate;
-    }
-
-    public void setObject(Text object)
-    {
-        this.object = object;
-    }
-
-    public void setSubject(Text subject)
-    {
-        this.subject = subject;
+        return String.format("%s, %s, %s %s", subject,predicate,object, context);
     }
 
     public Text getSubject()
     {
         return subject;
-    }
-
-    public Text getPredicate()
-    {
-        return predicate;
-    }
-
-    public Text getObject()
-    {
-        return object;
     }
 }

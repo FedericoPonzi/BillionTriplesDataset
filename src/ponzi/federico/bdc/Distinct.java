@@ -1,8 +1,9 @@
 package ponzi.federico.bdc;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -12,37 +13,31 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Created by Federico Ponzi
  */
 public class Distinct
 {
+    private static final Log LOG = LogFactory.getLog(Distinct.class);
+
     public static class TokenizerMapper
         extends Mapper<Object, Text, Text, NullWritable>
     {
 
-        private final static IntWritable one = new IntWritable(1);
-        private Text word = new Text();
-
+        private RDFStatement statement;
+        private Text subject;
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
+            statement = new RDFStatement();
+            subject = new Text();
             String[] sp = value.toString().split("\n");
-            String regex = "(?<subject>\\<[^\\>]+\\>|[a-zA-Z0-9\\_\\:]+) (?<predicate>\\<[^\\ ]+\\>) (?<object>\\<[^\\>]+\\>|\\\".*\\\"|[a-zA-Z0-9\\_\\:]+|\\\".*\\>) (?<source>\\<[^\\>]+\\> )?\\.";
-            Pattern PATTERN = Pattern.compile(regex);
             for(String s: sp)
             {
-                Matcher matcher = PATTERN.matcher(s);
-                if (matcher.matches())
+                if(statement.updateFromLine(s))
                 {
-                    word.set(matcher.group(2));
-                    context.write(word, NullWritable.get());
-                }else
-                {
-                    System.out.println("Nope:" + s);
-                    throw new RuntimeException();
+                    subject.set(statement.getSubject());
+                    context.write(subject, NullWritable.get());
                 }
             }
         }
@@ -51,8 +46,6 @@ public class Distinct
     public static class IntSumReducer
         extends Reducer<Text, NullWritable, Text, NullWritable>
     {
-        private IntWritable result = new IntWritable();
-
         public void reduce(Text key, Iterable<NullWritable> values,
             Context context
         ) throws IOException, InterruptedException {
@@ -61,11 +54,12 @@ public class Distinct
     }
 
     public static void main(String[] args) throws Exception {
+        final Log LOG = LogFactory.getLog(Distinct.class);
+        LOG.info("Starting count distinct");
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "word count");
         job.setJarByClass(WordCount.class);
         job.setMapperClass(TokenizerMapper.class);
-        //job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(NullWritable.class);
