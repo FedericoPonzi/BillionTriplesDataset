@@ -28,3 +28,23 @@ Updating the algorithm in order to count (and pass over) just the subject and no
 isaacisback@mrisaac ~/dev/mapreduce/Project/assets $ cat /tmp/mapreduce-output/part-r-00000 | wc -l
 788703
 it works :D
+
+In order to get just a single number as output, I've struggled a little with job chaining. In the end was really
+as simple as using as input for the next job the output directory of the precedent job.
+I've setup a small util class (JobsChainer) in order to do all the chaining stuff:
+
+    JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
+    j.waitForCompletion();
+
+In order to get a single number as output, I've been forced to setup 2 phaeses:
+1 phase
+    map(object key, text val)
+        emit(val.subject, null)
+    reduce(text k, null v)
+        emit(1, 1)
+2 phase
+    map(object key, text v)
+        emit(v, 1)
+    reduce(int k, int v)
+        emit(sum(v), null)
+
