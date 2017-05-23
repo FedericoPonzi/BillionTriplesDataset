@@ -103,7 +103,7 @@ public class Distinct
         job2.setOutputValueClass(IntWritable.class);
 
         String inPath = args[0];
-        inPath = "/home/isaacisback/dev/mapreduce/Project/assets/btc-2010-chunk-000";
+        //inPath = "/home/isaacisback/dev/mapreduce/Project/assets/btc-2010-chunk-000";
         JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
         j.waitForCompletion();
 

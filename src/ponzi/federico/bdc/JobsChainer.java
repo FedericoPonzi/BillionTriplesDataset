@@ -2,8 +2,8 @@ package ponzi.federico.bdc;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -45,17 +45,16 @@ public class JobsChainer
     public void setupChain() throws IOException
     {
         int i = 1;
-
-        FileInputFormat.addInputPath(jobs[0], input);
-        FileOutputFormat.setOutputPath(jobs[0], new Path(temp + "-0"));
+        TextInputFormat.addInputPath(jobs[0], input);
+        TextOutputFormat.setOutputPath(jobs[0], new Path(temp + "-0"));
 
         for (; i < jobs.length; i++)
         {
 
-            FileInputFormat.addInputPath(jobs[i], new Path(temp + "-" + (i - 1)));
-            FileOutputFormat.setOutputPath(jobs[i], new Path(temp + "-" + i));
+            TextInputFormat.addInputPath(jobs[i], new Path(temp + "-" + (i - 1)));
+            TextOutputFormat.setOutputPath(jobs[i], new Path(temp + "-" + i));
         }
-        FileOutputFormat.setOutputPath(jobs[jobs.length - 1], output);
+        TextOutputFormat.setOutputPath(jobs[jobs.length - 1], output);
     }
 
     public void waitForCompletion()
