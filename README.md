@@ -36,7 +36,7 @@ I've setup a small util class (JobsChainer) in order to do all the chaining stuf
     JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
     j.waitForCompletion();
 
-In order to get a single number as output, I've been forced to setup 2 phaeses:
+In order to get a single number as output, I've been forced to setup 2 phaeses/jobs:
 1 phase
     map(object key, text val)
         emit(val.subject, null)
@@ -49,3 +49,61 @@ In order to get a single number as output, I've been forced to setup 2 phaeses:
         emit(sum(v), null)
 
 -----
+
+
+# Indegree, outdegree and 10 max outdegree nodes.
+To get the indegree, and outdegree, we need to count the number of linking and linked nodes.
+In order to do this, we should:
+A -> link -> B
+A -> link -> D
+C -> link -> D
+D -> link -> A
+
+Outdegree:
+{ A : B, D}
+Indegree:
+{ A: D}
+
+So let's start from the outdegree count:
+
+1 phase:
+    map(object key, text val)
+        emit(val.subject, val.object)
+    reduce(object key, text values):
+        count = 0 #count the number of linked elements for this node.
+        for el in values:
+            count ++
+        emit(count, 1)
+here we save on the filesystem a file like this:
+A 1
+A 1
+A 1
+We need to read again and then count the values.
+
+2 phase: # This is just a count phase. we have like {d : {1 for every node with outdegree d}}
+    map(object key, text val):
+        emit(val, 1)
+    reduce (int key, text val): #{d: number of nodes with outdegree d}
+        count = 0
+        for el in values:
+            c++
+        emit(key, c)
+
+Before moving on, I needed a way to be sure that both the algorithm and its implementation were right. In order to do this,
+I used a small subset of a single chunk (27 rows/statments). First I've run the map-reduce jobs on this
+and got as output:
+2	1
+3	6
+7	1
+
+Then, I've removed everything after the first space (easy task with the regex) from the file. Basically I've kept the source nodes.
+Then with sort | uniq -c:
+      7 A
+      3 B
+      3 C
+      3 D
+      3 E
+      3 F
+      3 G
+      2 H
+As we can see, there is 1 node (H) with outdegree 2, 1 node with outdegree 7 and the other have outdegree 3.

@@ -123,4 +123,5 @@ public class RDFStatement implements WritableComparable<RDFStatement>
     {
         return subject;
     }
+    public Text getObject() { return object;}
 }
