@@ -172,23 +172,15 @@ The expected input size for the single reducer is the number_of_mappers * k, whi
         map(object key, text val):
             emit(0, val)
         combiner(int k, statment):
-           order(
+            r = get top k statments in val
+            for i = 1 to k
+                emit(i, r[i])
         reduce (int key, text val): #{d: number of nodes with outdegree d}
-            count = 0
-            for el in values:
-                c++
-            emit(key, c)
+            r = get top k statments in val
+            for i = 1 to k
+                emit(i, r[i])
 
-
-
-# 5 - Compute the percentage of triples with empty context, the percentage of triples whose subject is
-      a blank node, and the percentage of triples whose object is a blank node
-In order to do this count, first we need to know if a node it's a blank node. In order to do this, I've added a couple
-of utility function inside RDFStatment. A blank node, it's a node which looks like this:
-
-    _:genid7xxhttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Fsparqlx3Fqueryx3DDESCRIBEx2Bx253chttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Frdfx2Fusgovx2Fcongressx2F106x2Fbillsx2Fh819x253e
-
-In the implementation of this problem, I've found a very interesting problem. The fact that Mapreduce recycles the elements. More precisely:
+In the implementation of this algorithm, I've found a very interesting problem. The fact that Mapreduce recycles the elements. More precisely:
 
     List<NodeOutDegreeTuple> l = new ArrayList<>();
     for(NodeOutDegreeTuple n : values){
@@ -208,6 +200,12 @@ To overcome this problem, we can think at to solutions:
 Pratically speaking, for a small k value we should consider the first implementation, which requires k*number_of_nodes iterations.
 For this implementation, I've choosen the first implementation
 
+# 5 - Compute the percentage of triples with empty context, the percentage of triples whose subject is
+      a blank node, and the percentage of triples whose object is a blank node
+In order to do this count, first we need to know if a node it's a blank node. In order to do this, I've added a couple
+of utility function inside RDFStatment. A blank node, it's a node which looks like this:
+
+    _:genid7xxhttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Fsparqlx3Fqueryx3DDESCRIBEx2Bx253chttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Frdfx2Fusgovx2Fcongressx2F106x2Fbillsx2Fh819x253e
 
 The interesting thing is that they starts with "_:", so we can find them using this pattern.
 
