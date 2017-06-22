@@ -1,8 +1,4 @@
-package ponzi.federico.bdc;
-
-/**
- * Created by isaacisback on 16/06/17.
- */
+package ponzi.federico.bdc.problems;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -13,6 +9,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import ponzi.federico.bdc.JobsChainer;
+import ponzi.federico.bdc.WordCount;
 
 import java.io.IOException;
 
@@ -20,107 +18,89 @@ import java.io.IOException;
 /**
  * Created by Federico Ponzi
  */
-public class Indegree
+public class Distinct
 {
     private static final Log LOG = LogFactory.getLog(Distinct.class);
-    /** 1 job: **/
+
     public static class TokenizerMapper
-        extends Mapper<Object, Text, Text, Text>
+        extends Mapper<Object, Text, Text, NullWritable>
     {
 
         private RDFStatement statement;
         private Text subject;
-        private Text object;
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
             statement = new RDFStatement();
             subject = new Text();
-            object = new Text();
             String[] sp = value.toString().split("\n");
             for(String s: sp)
             {
                 if(statement.updateFromLine(s))
                 {
                     subject.set(statement.getSubject());
-                    object.set(statement.getObject());
-                    context.write(object, subject);
+                    context.write(subject, NullWritable.get());
                 }
             }
         }
     }
 
-    public static class CountNodesReducer
-        extends Reducer<Text, Text, IntWritable, IntWritable>
+    public static class DistinctReducer
+        extends Reducer<Text, NullWritable, IntWritable, NullWritable>
     {
 
-        private static final IntWritable count = new IntWritable(1);
         private static final IntWritable one = new IntWritable(1);
-        public void reduce(Text key, Iterable<Text> values,
+        public void reduce(Text key, Iterable<NullWritable> values,
             Context context
         ) throws IOException, InterruptedException {
-            int c = 0;
-            for(Text val : values) c++;
-            count.set(c);
-            context.write(count, one); //pass less data.
+            context.write(one, NullWritable.get()); //pass less data.
         }
     }
 
-    /** 2 job: **/
-    public static class CountSameDegreeNodesMapper
+
+    public static class CountMapper
         extends Mapper<Object, Text, IntWritable, IntWritable>
     {
+        private IntWritable one = new IntWritable(1);
         private IntWritable val = new IntWritable();
-        private IntWritable one  = new IntWritable();
-
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
-
             String[] sp = value.toString().split("\n");
             for(String s : sp)
             {
-                String[] r = s.split("\t");
-
-                val.set(Integer.parseInt(r[0]));
-
-                context.write(val, one);
+                val.set(sp.length);
+                context.write(one, val);
             }
         }
     }
     public static class PrintReducer
-        extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable>
+        extends Reducer<IntWritable, IntWritable, IntWritable, NullWritable>
     {
-        IntWritable r = new IntWritable();
+
         public void reduce(IntWritable key, Iterable<IntWritable> values,
             Context context
         ) throws IOException, InterruptedException {
             int res = 0;
             for(IntWritable v : values)
-                res += 1;
-            r.set(res);
-            context.write(key, r);
+                res += v.get();
+            context.write(new IntWritable(res), NullWritable.get());
         }
     }
     public static void main(String[] args) throws Exception {
         final Log LOG = LogFactory.getLog(Distinct.class);
-        LOG.info("Starting outdegree counter | arg1 input, arg2 output, arg3 temp dir");
+        LOG.info("Starting count distinct | arg1 input, arg2 output, arg3 temp dir");
         Configuration conf = new Configuration();
 
         Job job = Job.getInstance(conf, "distinct");
-        job.setJarByClass(Indegree.class);
+        job.setJarByClass(WordCount.class);
         job.setMapperClass(TokenizerMapper.class);
-        job.setReducerClass(CountNodesReducer.class);
-        job.setMapOutputKeyClass(Text.class);
-        job.setMapOutputValueClass(Text.class);
-        job.setOutputKeyClass(IntWritable.class);
+        job.setReducerClass(DistinctReducer.class);
+        job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(NullWritable.class);
 
         Job job2 = Job.getInstance(conf, "distinct count");
-        job2.setJarByClass(Indegree.class);
-        job2.setMapperClass(CountSameDegreeNodesMapper.class);
+        job2.setJarByClass(WordCount.class);
+        job2.setMapperClass(CountMapper.class);
         job2.setReducerClass(PrintReducer.class);
-
-        job2.setMapOutputKeyClass(IntWritable.class);
-        job2.setMapOutputValueClass(IntWritable.class);
         job2.setOutputKeyClass(IntWritable.class);
         job2.setOutputValueClass(IntWritable.class);
 
@@ -129,6 +109,18 @@ public class Indegree
         JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
         j.waitForCompletion();
 
+    /*    FileInputFormat.addInputPath(job, new Path(inPath));
+        FileOutputFormat.setOutputPath(job, new Path(args[2]));
+        FileInputFormat.addInputPath(job2, new Path(args[2]));
+        FileOutputFormat.setOutputPath(job2, new Path(args[1]) );
+        if(job.waitForCompletion(true))
+        {
+            if(job2.waitForCompletion(true))
+            {
+                System.exit(0);
+            }
+        }
+        System.exit(1);*/
     }
 }
 

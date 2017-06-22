@@ -1,4 +1,4 @@
-package ponzi.federico.bdc;
+package ponzi.federico.bdc.problems;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

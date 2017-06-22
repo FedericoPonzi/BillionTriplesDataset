@@ -1,4 +1,4 @@
-package ponzi.federico.bdc;
+package ponzi.federico.bdc.problems;
 
 /**
  * Created by isaacisback on 16/06/17.
@@ -13,6 +13,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import ponzi.federico.bdc.JobsChainer;
 
 import java.io.IOException;
 

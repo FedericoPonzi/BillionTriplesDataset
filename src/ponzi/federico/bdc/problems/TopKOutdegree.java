@@ -1,4 +1,4 @@
-package ponzi.federico.bdc;
+package ponzi.federico.bdc.problems;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -9,6 +9,7 @@ import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import ponzi.federico.bdc.JobsChainer;
 
 import java.io.DataInput;
 import java.io.DataOutput;
