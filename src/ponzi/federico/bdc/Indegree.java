@@ -43,7 +43,7 @@ public class Indegree
                 {
                     subject.set(statement.getSubject());
                     object.set(statement.getObject());
-                    context.write(subject, object);
+                    context.write(object, subject);
                 }
             }
         }
