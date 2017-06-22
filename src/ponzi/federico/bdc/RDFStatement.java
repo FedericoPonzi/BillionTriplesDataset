@@ -2,6 +2,7 @@ package ponzi.federico.bdc;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 
@@ -18,20 +19,26 @@ public class RDFStatement implements WritableComparable<RDFStatement>
 {
     private static final Log LOG = LogFactory.getLog(RDFStatement.class);
 
-    public static final String REGEX = "(?<subject>\\<[^\\>]+\\>|[a-zA-Z0-9\\_\\:]+) (?<predicate>\\<[^\\ ]+\\>) (?<object>\\<[^\\>]+\\>|\\\".*\\\"|[a-zA-Z0-9\\_\\:]+|\\\".*\\>) (?<source>\\<[^\\>]+\\> )?\\.";
+    public static final String REGEX = "(?<subject>\\<[^\\>]+\\>|[a-zA-Z0-9\\_\\:]+) (?<predicate>\\<[^\\ ]+\\>) (?<object>\\<[^\\>]+\\>|\\\".*\\\"|[a-zA-Z0-9\\_\\:]+|\\\"[^\\>]*\\>) (?<source>\\<[^\\>]+\\> )?\\.";
     private static final Pattern PATTERN = Pattern.compile(REGEX);
-
     private Text subject;
     private Text predicate;
     private Text object;
     private Text context;
-    private Matcher matcher;
+    private IntWritable outdegree;
 
     public RDFStatement(){
         subject = new Text();
         predicate = new Text();
         object = new Text();
         context = new Text();
+        outdegree = new IntWritable();
+    }
+    public boolean hasBlankSubject(){
+        return subject.toString().charAt(0) == '_';
+    }
+    public boolean hasBlankObject(){
+        return subject.toString().charAt(0) == '_';
     }
 
     public boolean updateFromLine(String line)
@@ -51,19 +58,22 @@ public class RDFStatement implements WritableComparable<RDFStatement>
 
     public void setAll(String subject, String predicate,String object, String context)
     {
-
         this.subject = new Text(subject);
         this.predicate = new Text(predicate);
         this.object = new Text(object);
         this.context = context == null ? new Text() : new Text(context);
+        this.outdegree = new IntWritable(0);
     }
-
+    public boolean hasContext(){
+        return this.context.toString().length() > 0;
+    }
     public void copyFrom(RDFStatement other)
     {
         subject = other.subject;
         predicate = other.predicate;
         object = other.object;
         context = other.context;
+        outdegree = other.outdegree;
     }
     @Override public boolean equals(Object obj)
     {
@@ -105,6 +115,7 @@ public class RDFStatement implements WritableComparable<RDFStatement>
         predicate.write(out);
         object.write(out);
         context.write(out);
+        outdegree.write(out);
     }
 
     @Override public void readFields(DataInput in) throws IOException
@@ -113,6 +124,7 @@ public class RDFStatement implements WritableComparable<RDFStatement>
         predicate.readFields(in);
         object.readFields(in);
         context.readFields(in);
+        outdegree.readFields(in);
     }
     @Override public String toString()
     {
@@ -124,4 +136,5 @@ public class RDFStatement implements WritableComparable<RDFStatement>
         return subject;
     }
     public Text getObject() { return object;}
+
 }
