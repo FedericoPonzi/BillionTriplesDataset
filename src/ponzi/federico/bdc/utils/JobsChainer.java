@@ -1,4 +1,4 @@
-package ponzi.federico.bdc;
+package ponzi.federico.bdc.utils;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;

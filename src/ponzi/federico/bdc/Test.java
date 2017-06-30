@@ -1,5 +1,7 @@
 package ponzi.federico.bdc;
 
+import ponzi.federico.bdc.problems.TopKOutdegree;
+
 import java.io.File;
 import java.util.*;
 import java.util.regex.Matcher;

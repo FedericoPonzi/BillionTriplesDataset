@@ -13,7 +13,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
-import ponzi.federico.bdc.JobsChainer;
+import ponzi.federico.bdc.utils.JobsChainer;
+import ponzi.federico.bdc.utils.RDFStatement;
 
 import java.io.IOException;
 

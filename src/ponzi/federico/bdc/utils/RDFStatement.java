@@ -1,4 +1,4 @@
-package ponzi.federico.bdc.problems;
+package ponzi.federico.bdc.utils;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -39,6 +39,16 @@ public class RDFStatement implements WritableComparable<RDFStatement>
     }
     public boolean hasBlankObject(){
         return subject.toString().charAt(0) == '_';
+    }
+
+    public Text getContext()
+    {
+        return context;
+    }
+
+    public void clearContext()
+    {
+        context = new Text();
     }
 
     public boolean updateFromLine(String line)
@@ -128,7 +138,7 @@ public class RDFStatement implements WritableComparable<RDFStatement>
     }
     @Override public String toString()
     {
-        return String.format("%s, %s, %s %s", subject,predicate,object, context);
+        return String.format("%s %s %s %s.", subject,predicate,object, context);
     }
 
     public Text getSubject()

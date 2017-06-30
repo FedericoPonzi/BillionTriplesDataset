@@ -15,41 +15,40 @@ import ponzi.federico.bdc.utils.RDFStatement;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.PriorityQueue;
 
 
 /**
  * Created by Federico Ponzi
  */
-public class TopKOutdegree
+public class SameTripleDifferentContexts
 {
-    private static final Log LOG = LogFactory.getLog(TopKOutdegree.class);
+    private static final Log LOG = LogFactory.getLog(SameTripleDifferentContexts.class);
     private static final int K = 5;
     /** 1 job: **/
     public static class TokenizerMapper
-        extends Mapper<Object, Text, Text, Text>
+        extends Mapper<Object, Text, RDFStatement, Text>
     {
 
         private RDFStatement statement;
-        private Text subject;
-        private Text object;
 
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
             statement = new RDFStatement();
-            subject = new Text();
-            object = new Text();
             String[] sp = value.toString().split("\n");
+            RDFStatement output = new RDFStatement();
             for(String s: sp)
             {
                 if(statement.updateFromLine(s))
                 {
-                    subject.set(statement.getSubject());
-                    object.set(statement.getObject());
-                    context.write(subject, object);
-                }else {
-                    LOG.error("Error parsing: " + s);
+                    output.copyFrom(statement);
+                    output.clearContext();
+                    /*
+                    Wait, wot? We do this to:
+                    - Avoid creating another DS for the triple
+                    - Pass less data (we clear the context)
+                     */
+                    context.write(output, statement.getContext());
                 }
             }
         }
@@ -57,11 +56,10 @@ public class TopKOutdegree
     }
 
     public static class CountNodesReducer
-        extends Reducer<Text, Text, Text, IntWritable>
+        extends Reducer<RDFStatement, Text, RDFStatement, IntWritable>
     {
-
         private static final IntWritable count = new IntWritable(1);
-        public void reduce(Text key, Iterable<Text> values,
+        public void reduce(RDFStatement key, Iterable<Text> values,
             Context context
         ) throws IOException, InterruptedException {
             int c = 0;
@@ -71,92 +69,84 @@ public class TopKOutdegree
             context.write(key, count);
         }
     }
-    public static class OutdegreeComparator implements Comparator<NodeOutDegreeTuple>
-    {
-        @Override public int compare(NodeOutDegreeTuple o1, NodeOutDegreeTuple o2)
-        {
-            if(o1.outdegree.get() < o2.outdegree.get())
-            {
-                return -1;
-            }
-            if (o1.outdegree.get() == o2.outdegree.get())
-            {
-                return 0;
-            }
-            //if (o1.outdegree.get() > o2.outdegree.get())
-            return 1;
-        }
 
-    }
-    public static class NodeOutDegreeTuple implements WritableComparable<NodeOutDegreeTuple>{
-        private Text node = new Text();
-        private IntWritable outdegree = new IntWritable();
-        public NodeOutDegreeTuple()
+    public static class TripleNContextsTuple implements WritableComparable<TripleNContextsTuple>{
+        private RDFStatement triple = new RDFStatement();
+        private IntWritable ncontext = new IntWritable();
+        public TripleNContextsTuple()
         {
             super();
-            node = new Text();
-            outdegree = new IntWritable();
+            triple = new RDFStatement();
+            ncontext = new IntWritable();
         }
-        public NodeOutDegreeTuple(String n, int o)
+        public TripleNContextsTuple(String n, int o)
         {
-            node.set(n);
-            outdegree.set(o);
+            triple = new RDFStatement();
+            triple.updateFromLine(n);
+            ncontext.set(o);
         }
-        public NodeOutDegreeTuple(NodeOutDegreeTuple o){
-            node.set(o.node.toString());
-            outdegree.set(o.outdegree.get());
+        public TripleNContextsTuple(TripleNContextsTuple o){
+            triple.copyFrom(o.triple);
+            ncontext.set(o.ncontext.get());
         }
 
-        @Override public int compareTo(NodeOutDegreeTuple o)
+        @Override public int compareTo(TripleNContextsTuple o)
         {
-            return outdegree.compareTo(o.outdegree) == 0 ? node.compareTo(o.node) : outdegree.compareTo(o.outdegree);
+            return ncontext.compareTo(o.ncontext) == 0 ? triple.compareTo(o.triple) : ncontext.compareTo(o.ncontext);
         }
 
         @Override public void write(DataOutput out) throws IOException
         {
-            node.write(out);
-            outdegree.write(out);
+            triple.write(out);
+            ncontext.write(out);
         }
 
         @Override public void readFields(DataInput in) throws IOException
         {
-            node.readFields(in);
-            outdegree.readFields(in);
+            triple.readFields(in);
+            ncontext.readFields(in);
         }
 
         @Override public int hashCode()
         {
-            return node.hashCode()*outdegree.hashCode();
+            return triple.hashCode()*ncontext.hashCode();
         }
 
         @Override public boolean equals(Object obj)
         {
-            if(obj instanceof NodeOutDegreeTuple)
+            if(obj instanceof TripleNContextsTuple)
             {
-                NodeOutDegreeTuple o = (NodeOutDegreeTuple) obj;
-                return o.outdegree.equals(outdegree) && o.node.equals(node);
+                TripleNContextsTuple o = (TripleNContextsTuple) obj;
+                return o.ncontext.equals(ncontext) && o.triple.equals(triple);
             }
             return super.equals(obj);
         }
 
         @Override public String toString()
         {
-            return "(Node: " + node.toString() +
-                ", Outdegree: " + outdegree.toString() + ")";
+            return "(Node: " + triple.toString() +
+                ", Outdegree: " + ncontext.toString() + ")";
+        }
+
+        public void set(RDFStatement n, int c)
+        {
+            triple.copyFrom(n);
+            ncontext.set(c);
         }
         public void set(String n, int c)
         {
-            node.set(n);
-            outdegree.set(c);
+            triple = new RDFStatement();
+            triple.updateFromLine(n);
+            ncontext.set(c);
         }
     }
 
     /** 2 job: **/
     public static class CountSameDegreeNodesMapper
-        extends Mapper<Object, Text, IntWritable, NodeOutDegreeTuple>
+        extends Mapper<Object, Text, IntWritable, TripleNContextsTuple>
     {
         private IntWritable zero = new IntWritable(0);
-        private NodeOutDegreeTuple tup = new NodeOutDegreeTuple();
+        private TripleNContextsTuple tup = new TripleNContextsTuple();
 
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
@@ -170,23 +160,23 @@ public class TopKOutdegree
             }
         }
     }
-    public static class TopKReducer // Inputs {0, top k values from every mapper }
-        extends Reducer<IntWritable, NodeOutDegreeTuple, IntWritable, NodeOutDegreeTuple>
+    public static class TopKReducer
+        extends Reducer<IntWritable, TripleNContextsTuple, IntWritable, TripleNContextsTuple>
     {
         IntWritable pos = new IntWritable(0);
-        public void reduce(IntWritable key, Iterable<NodeOutDegreeTuple> values,
+        public void reduce(IntWritable key, Iterable<TripleNContextsTuple> values,
             Context context
         ) throws IOException, InterruptedException {
             // Inizialize the Queue:
-            PriorityQueue<NodeOutDegreeTuple> l = new PriorityQueue<>(K);
+            PriorityQueue<TripleNContextsTuple> l = new PriorityQueue<>(K);
 
             //Iterate on the iterables:
-            for(NodeOutDegreeTuple n : values)
+            for(TripleNContextsTuple n : values)
             {
-                l.add(new NodeOutDegreeTuple(n));
+                l.add(new TripleNContextsTuple(n));
                 if(l.size() > K) l.remove(); //Keep just k elements.
             }
-            for(TopKOutdegree.NodeOutDegreeTuple n : l){
+            for(SameTripleDifferentContexts.TripleNContextsTuple n : l){
                 System.out.println(n.toString());
             }
             //Collections.sort(l); this is not working
@@ -200,12 +190,12 @@ public class TopKOutdegree
         }
     }
     public static void main(String[] args) throws Exception {
-        final Log LOG = LogFactory.getLog(TopKOutdegree.class);
-        LOG.info("Starting outdegree counter | arg1 input, arg2 output, arg3 temp dir");
+        final Log LOG = LogFactory.getLog(SameTripleDifferentContexts.class);
+        LOG.info("Starting ncontext counter | arg1 input, arg2 output, arg3 temp dir");
         Configuration conf = new Configuration();
 
         Job job = Job.getInstance(conf, "distinct");
-        job.setJarByClass(TopKOutdegree.class);
+        job.setJarByClass(SameTripleDifferentContexts.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setReducerClass(CountNodesReducer.class);
         job.setMapOutputKeyClass(Text.class);
@@ -219,15 +209,14 @@ public class TopKOutdegree
         job2.setReducerClass(TopKReducer.class);
 
         job2.setMapOutputKeyClass(IntWritable.class);
-        job2.setMapOutputValueClass(NodeOutDegreeTuple.class);
+        job2.setMapOutputValueClass(TripleNContextsTuple.class);
         job2.setOutputKeyClass(IntWritable.class);
-        job2.setOutputValueClass(NodeOutDegreeTuple.class);
+        job2.setOutputValueClass(TripleNContextsTuple.class);
 
         String inPath = args[0];
         //inPath = "/home/isaacisback/dev/mapreduce/Project/assets/btc-2010-chunk-000";
         JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
         j.waitForCompletion();
-
     }
 }
 
