@@ -79,11 +79,11 @@ public class RDFStatement implements WritableComparable<RDFStatement>
     }
     public void copyFrom(RDFStatement other)
     {
-        subject = other.subject;
-        predicate = other.predicate;
-        object = other.object;
-        context = other.context;
-        outdegree = other.outdegree;
+        subject.set(other.subject.toString());
+        predicate.set(other.predicate);
+        object.set(other.object);
+        context.set(other.context);
+        outdegree.set(other.outdegree.get());
     }
     @Override public boolean equals(Object obj)
     {

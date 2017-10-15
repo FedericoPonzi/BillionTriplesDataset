@@ -81,7 +81,7 @@ public class Percentages {
         job.setMapperClass(TokenizerMapper.class);
         job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
-        job.setOutputKeyClass(Text.class);
+        job.setOutputKeyClass(IntWritable.class);
         job.setOutputValueClass(IntWritable.class);
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));

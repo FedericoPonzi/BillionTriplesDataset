@@ -15,6 +15,7 @@ import ponzi.federico.bdc.utils.RDFStatement;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.PriorityQueue;
 
 
@@ -25,51 +26,6 @@ public class SameTripleDifferentContexts
 {
     private static final Log LOG = LogFactory.getLog(SameTripleDifferentContexts.class);
     private static final int K = 5;
-    /** 1 job: **/
-    public static class TokenizerMapper
-        extends Mapper<Object, Text, RDFStatement, Text>
-    {
-
-        private RDFStatement statement;
-
-        public void map(Object key, Text value, Context context
-        ) throws IOException, InterruptedException {
-            statement = new RDFStatement();
-            String[] sp = value.toString().split("\n");
-            RDFStatement output = new RDFStatement();
-            for(String s: sp)
-            {
-                if(statement.updateFromLine(s))
-                {
-                    output.copyFrom(statement);
-                    output.clearContext();
-                    /*
-                    Wait, wot? We do this to:
-                    - Avoid creating another DS for the triple
-                    - Pass less data (we clear the context)
-                     */
-                    context.write(output, statement.getContext());
-                }
-            }
-        }
-
-    }
-
-    public static class CountNodesReducer
-        extends Reducer<RDFStatement, Text, RDFStatement, IntWritable>
-    {
-        private static final IntWritable count = new IntWritable(1);
-        public void reduce(RDFStatement key, Iterable<Text> values,
-            Context context
-        ) throws IOException, InterruptedException {
-            int c = 0;
-            for(Text val : values) c++;
-            count.set(c);
-            LOG.info(key.toString() +  count.toString());
-            context.write(key, count);
-        }
-    }
-
     public static class TripleNContextsTuple implements WritableComparable<TripleNContextsTuple>{
         private RDFStatement triple = new RDFStatement();
         private IntWritable ncontext = new IntWritable();
@@ -125,7 +81,7 @@ public class SameTripleDifferentContexts
         @Override public String toString()
         {
             return "(Node: " + triple.toString() +
-                ", Outdegree: " + ncontext.toString() + ")";
+                ", Contexts: " + ncontext.toString() + ")";
         }
 
         public void set(RDFStatement n, int c)
@@ -140,6 +96,60 @@ public class SameTripleDifferentContexts
             ncontext.set(c);
         }
     }
+    /** 1 job: **/
+    public static class TokenizerMapper
+        extends Mapper<Object, Text, RDFStatement, Text>
+    {
+
+        private RDFStatement statement;
+
+        public void map(Object key, Text value, Context context
+        ) throws IOException, InterruptedException {
+            statement = new RDFStatement();
+            String[] sp = value.toString().split("\n");
+            RDFStatement output = new RDFStatement();
+            for(String s: sp)
+            {
+                if(statement.updateFromLine(s))
+                {
+                    output.copyFrom(statement);
+                    output.clearContext();
+                    /*
+                    Wait, wot? We do this to:
+                    - Avoid creating another DS for the triple
+                    - Pass less data (we clear the context)
+                     */
+                    context.write(output, statement.getContext());
+                }
+            }
+        }
+
+    }
+
+    public static class CountNodesReducer
+        extends Reducer<RDFStatement, Text, RDFStatement, IntWritable>
+    {
+        private static final IntWritable count = new IntWritable(1);
+        public void reduce(RDFStatement key, Iterable<Text> values,
+            Context context
+        ) throws IOException, InterruptedException {
+            int c = 0;
+            HashSet<Text> seen = new HashSet<>();
+
+            for(Text val : values)
+            {
+                if (seen.contains(val))
+                    continue;
+                seen.add(new Text(val.toString()));
+                c++;
+            }
+            count.set(c);
+            LOG.info(key.toString() +  count.toString());
+            context.write(key, count);
+        }
+    }
+
+
 
     /** 2 job: **/
     public static class CountSameDegreeNodesMapper
@@ -169,16 +179,13 @@ public class SameTripleDifferentContexts
         ) throws IOException, InterruptedException {
             // Inizialize the Queue:
             PriorityQueue<TripleNContextsTuple> l = new PriorityQueue<>(K);
-
+            //values.forEach(System.out::println);
             //Iterate on the iterables:
-            for(TripleNContextsTuple n : values)
-            {
+            for(TripleNContextsTuple n : values) {
                 l.add(new TripleNContextsTuple(n));
                 if(l.size() > K) l.remove(); //Keep just k elements.
             }
-            for(SameTripleDifferentContexts.TripleNContextsTuple n : l){
-                System.out.println(n.toString());
-            }
+            l.forEach(System.out::println);
             //Collections.sort(l); this is not working
 
             int min = Integer.min(l.size(), K);
@@ -198,9 +205,9 @@ public class SameTripleDifferentContexts
         job.setJarByClass(SameTripleDifferentContexts.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setReducerClass(CountNodesReducer.class);
-        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputKeyClass(RDFStatement.class);
         job.setMapOutputValueClass(Text.class);
-        job.setOutputKeyClass(Text.class);
+        job.setOutputKeyClass(RDFStatement.class);
         job.setOutputValueClass(IntWritable.class);
 
         Job job2 = Job.getInstance(conf, "distinct count");
