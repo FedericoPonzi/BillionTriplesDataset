@@ -5,7 +5,10 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.GzipCodec;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -37,6 +40,7 @@ public class RemoveDuplicateTriples {
             {
                 if(statement.updateFromLine(s))
                 {
+                    statement.clearContext();
                     context.write(statement, nill);
                 }
             }
@@ -51,14 +55,18 @@ public class RemoveDuplicateTriples {
             Context context
         ) throws IOException, InterruptedException {
             out.set(key.toString());
-            LOG.info(key.toString());
             context.write(out, nill);
         }
     }
 
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "word count");
+        conf.setBoolean("mapred.output.compress", true);
+        conf.setClass("mapred.output.compression.codec", GzipCodec.class, CompressionCodec.class);
+        conf.set("mapred.output.compression.type", SequenceFile.CompressionType.BLOCK.toString());
+
+        Job job = Job.getInstance(conf, "RemoveDuplicateTriples");
+
         job.setJarByClass(RemoveDuplicateTriples.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setReducerClass(DiffReducer.class);

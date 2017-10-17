@@ -107,6 +107,7 @@ public class Outdegree
         LOG.info("Starting outdegree counter | arg1 input, arg2 output, arg3 temp dir");
         Configuration conf = new Configuration();
 
+
         Job job = Job.getInstance(conf, "distinct");
         job.setJarByClass(Outdegree.class);
         job.setMapperClass(TokenizerMapper.class);

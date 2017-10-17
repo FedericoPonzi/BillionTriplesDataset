@@ -1,20 +1,12 @@
 
+
 ## 1 - Compute the number of distinct nodes and edges in the corresponding RDF graph.
-Using distinct with strings, and then wc -l:
-3895
-
-Using distinct with RDFStatement, and then `wc -l`:
-
-    6756599
-also, the second approach is very more slow and memory expensive.
-* In the first case, we are moving only the subject text.
-* In the second, we are moving everything instead.
 
 In order to understand who's right, let's do some command lines trick.
 
 This should do the magic:
 
-    cat btc-2010-chunk-000 | sed -e "s/\ .*//g"| sort | uniq -c | wc -l```
+    cat btc-2010-chunk-000 | sed -e "s/\ .*//g"| sort | uniq -c | wc -l
 
 Gets the first colmun (the subject), sort, remove duplicates, count number of distincts results.
 Just for fun, let's also count the time:
@@ -41,7 +33,7 @@ Moving on the count, in order to get just a single number as output, I've strugg
 In the end was really as simple as using as input for the latter job the output directory of the former job.
 I've setup a small util class (`JobsChainer`) to do all the chaining stuff:
 
-    JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
+    JobsChainer j = new JobsChainer(inPath, args[1], job, job2);$
     j.waitForCompletion();
 
 To get a single number as output, I've been forced to setup 2 phaeses/jobs:
@@ -69,7 +61,7 @@ For example:
     A -> link -> D
     C -> link -> D
     D -> link -> A
-
+    
     A's out going links:
     { A : [B, D], B: [],  C : [D] , D: [A]}
     A's incoming links:
@@ -221,18 +213,17 @@ The expected input size for the single reducer is the number_of_mappers * k, whi
             for el in values:
                 count ++
             emit(count, 1)
-
+    
     2 phase: # Get the top k
         map(object key, text val):
-            emit(0, val)
-        combiner(int k, Statement val):
-            r = get top k statements in val
-            for i = 1 to k
-                emit(i, r[i])
+            Insert all elements in a ordered 10-sized list
+        in cleanup phase:
+            for el in topKList:
+                emit(0, el)
         reduce (int key, statements val): #{d: number of nodes with outdegree d}
-            r = get top k statements in val
-            for i = 1 to k
-                emit(i, r[i])
+            Insert all elements in a ordered 10-sized list
+            for el in topKList:
+                emit(0, el)
 
 In the implementation of this algorithm, I've found a very interesting problem: the fact that Mapreduce recycles storage for the elements.
 
@@ -249,13 +240,14 @@ More precisely:
     for(NodeOutDegreeTuple n : l){
         LOG.info(key.toString() +  n.toString());
     }
-The seconod output was l.size() times the last inserted element. This is because mapreduce recycles the same space every time an element from the iterator gets consumed.
+The second output was l.size() times the last inserted element. This is because mapreduce recycles the same space every time an element from the iterator gets consumed.
 To overcome this problem, we can think at two solutions:
 
-    1. *A computation consuming solution*: Keep a priorirty queue of k elements. For every element, try to insert and optionally remove the node with the smallest outdegree value.
+    1. *A computation consuming solution*: Keep top k elements. Add new elements, and remove the node with smaller degree. For every element, try to insert and optionally remove the node with the smallest outdegree value.
     2. *A space consuming solution*: Save every element in a list, sort it and get the first 10 elements.
 Pratically speaking, for a small k value we should consider the first implementation, which requires O(k*number_of_nodes iterations).
-For this implementation, I've choosen the first implementation
+Since k=10 is very small, I've choosen the first implementation
+
 
 ## 5 - Compute the percentage of triples with empty context, the percentage of triples whose subject is a blank node, and the percentage of triples whose object is a blank node
 In order to do this count, first we need to know if a node it's a blank node. In order to do this, I've added a couple
@@ -272,7 +264,7 @@ This said, find the number these percentage it's straightforward. We just need t
             blankSubject = 0
             blankObject = 0
             noContext = 0
-
+    
             for l in vals #iterate throu all the lines
                 if l.subject.isBlank:
                    blankSubject++
@@ -283,7 +275,7 @@ This said, find the number these percentage it's straightforward. We just need t
             emit(0, blankSubject) #map empty subjects to key 0
             emit(1, blankObject)  #map empty objects to key 1
             emit(2, noContext) # map no context statements to key 2
-
+    
         reduce(object key, text values):
             emit(key, sum(values))
 
@@ -321,39 +313,47 @@ After running these commands, I had sample.txt with 54 rows (every row is duplic
     $ diff result.txt sorted.txt
 
 Since diff had no output, it means there are no difference!
+#### Tested, not really well
+After running the code on AWS, I've realized that I wasn't really removing duplicate triples. I've forgot to remove the context after loading the triple inside a RFDStatment Object.
+Also, another thing is: the cluster need to move a lot of data. I wasn't thinking of this while working on my local machine. My input on AWS is already gzipped, but I've added these few lines inside the config in order to have a gzipped output (it will also be easier to compare it with the gzipped input)
+
+    conf.setBoolean("mapred.output.compress", true);
+    conf.setClass("mapred.output.compression.codec", GzipCodec.class, CompressionCodec.class);
+    conf.set("mapred.output.compression.type", SequenceFile.CompressionType.BLOCK.toString());
+
 
 ## 6 - Each triple can appear with different contexts in the dataset. For each triple, compute the number of distinct contexts in which the triple appears (the empty context counts as 1). Report the 10 triples with the largest number of distinct contexts (break ties arbitrarily)
-*Please notice: I've put this 6th point as last, because I've made the points in this way. So It's easier to understand my design choices based on the prior ones.*
+*Please notice: I've put this 6th point as last, because I've made the points in this way. So It's easier to understand my design choices based on the prior ones. In particular, this problem is a "find top k" kind.*
 We know in advance that this computation will require a lot of time. The reason is that we need to use the triple as a key,
 This means that we'll need to move around a *lot* of data.
-An optimization, would be to move an hash instead of the full triple but we can't because we need to report the top 10 nodes.
+An optimization, would be to move a (possibly smaller) hash instead of the full triple but we can't because we need to report the top 10 nodes.
 
 To solve this problem, we will need 2 jobs:
-  * The first will compute the number of contexts per triple.
-  * The second job: while the first mapper will read from disk the output of the first reducer, the reducer will get the top k triples.
-In pseudocode:
-    old:
 
-    1 job:
-        map(Object key, Text val):
-            emit(<val.subject, predicate, object>, val.context)
+*   The first will compute the number of contexts per triple.
+*   The second job: while the first mapper will read from disk the output of the first reducer, the reducer will get the top k triples.
+    In pseudocode:
 
-        reduce(StatementsTriple k, List of contexts l):
-            count = l.size()
-            emit(k, count)
+      1 job:
+          map(Object key, Text val):
+              emit(<subject, predicate, object>, context)
+        
+          reduce(StatementsTriple k, List of contexts l):
+              count = l.size()
+              emit(k, count)
 
-    2 job:
-        map(Object key, text val): // Parse the lines
-            emit(0, <StatementsTriple, count>) //map to one reducer
-
-        reduce(useless k, tuples <StatementsTriple, count>):
-            r = get top k statements in t
-            for i = 1 to k
-                emit(i, r[i])
+      2 job:
+          map(Object key, text val): // Parse the lines
+              emit(0, <StatementsTriple, count>) //map to one reducer
+        
+          reduce(useless k, tuples <StatementsTriple, count>):
+              r = get top k statements in t
+              for i = 1 to k
+                  emit(i, r[i])
 
 
 ### Tesing the implementation
-The implementation it's mainly a copy-paste of parts of code from prior exercises. To test this out, I've:
+To test this out, I have:
 
     * Copy and pasted twice the same file, so every line has at list a double. (The file is as I leave it from the previous implementation test)
     * Copy-pasted the last two lines from the sample.txt file, multiple times.
@@ -372,30 +372,64 @@ One node with 6 different contexts.
 At this point, I've realized that this is not what the statement wanted, because it requested **distinct** contexts.
 In order to fix this, we should not count already seen contexts, so an HashSet looked like a good solution...
 
-    HashSet<Text> seen = new HashSet<>();
+```java
+HashSet<Text> seen = new HashSet<>();
+for(Text val : values)
+{
+    if (seen.contains(val))
+        continue;
+    seen.add(new Text(val.toString()));
+    count++;
+}
+```
 
-    for(Text val : values)
-    {
-        if (seen.contains(val))
-            continue;
-        seen.add(new Text(val.toString()));
-        count++;
-    }
-... for the moment. The problem is that if a triple has too many context, this could lead to a memory leak.
-This dependes much on the graph, and the size of the nodes in the cluster (which we will see later, on amazon!)
+... for the moment. But will it *scale*? The problem is that if a statement has too many *context* (or in other words, the HashSet becomes too big), this could lead to a memory leak.
+
+This dependes much on the *graph*, and the *the nodes in the cluster* (which we will see later, on amazon!). In general, this doesn't seem a scalable solution. A possible improovement would be to use some space-efficient hashing method, like a bloom filter (and relax the exact-solution condition of course).
+
+An alternative solution able to scale, may look like this:
+
+    1 job:
+        map(Object key, Text val):
+            emit(context, <subject, predicate, object>) # Remove duplicate contexts
+    
+        reduce(Contexts k, List of RFDStatments l):
+            for(s in l):
+                emit(s, k)
+    
+    2 job:
+        map(Object key, Text val):
+            emit(<subject, predicate, object>, context) # Now contexts are unique
+    
+        reduce(StatementsTriple k, List of contexts l):
+            count = l.size()
+            emit(k, count)
+    
+    3 job:
+        map(Object key, text val): // Parse the lines
+            emit(0, <StatementsTriple, count>) //map to one reducer
+    
+        reduce(useless k, tuples <StatementsTriple, count>):
+            r = get top k statements in t
+            for i = 1 to k
+                emit(i, r[i])
+
+In this solution, we add another job as a pre-phase to remove duplicate contexts.
+
 
 
 ---
-## AWS: Amazon web services. Let's do this.
-Amazon has a load of different cloud services, that let a noob user like me easily create a cluster of nodes and run a big computation like this, on terabytes of data.
-First of all, I needed to understand the services I'll need:
- * Amazon Elastic Map Reduce (EMR): to create the cluster and run M/R jobs. It is a custom implementation of Hadoop (but hadoop-compatible).
- * Amazon Simple Storage Service (S3) : A cheap static file hosting. It will host the RDF graph.
- * Amazon Elastic Compute Cloud (EC2): To create a server of various kind.  I will need a micro-tier server, to download the data and put it on S3.
- * Amazon Identity & Access Management (IAM): To handle users of the various services. I need this to let the EC2 instance access the S3 bucket.
 
-I want to use Amazon ec2, because I don't want to use my connection and pc to download the files from the server and upload them to s3.
-Also, to keep things fast and cheap, I don't want to store them locally on the ec2 machine, but upload them directly to s3.
+## Running on cluster: Amazon web services
+Amazon has a load of different cloud services, that let a noob user like me easily create a cluster of nodes and run a big computation like this, on terabytes of data.
+First of all, I needed to understand the services that I'll need:
+* Amazon Elastic Map Reduce (EMR): to create the cluster and run M/R jobs. It is a custom implementation of Hadoop (but hadoop-compatible).
+* Amazon Simple Storage Service (S3) : A cheap static file host. It will host the RDF graph files, and the results of the jobs .
+* Amazon Elastic Compute Cloud (EC2): "Fully" virtual servers renting. We can have a machine with the exact amount of specs we need, and vertical/horizontal scale it as needed. I will need a *micro-tier* server, just to download the data and put it on S3.
+* Amazon Identity & Access Management (IAM): To handle users of the various services. I need this to let the EC2 instance access the S3 bucket.
+
+I want to use Amazon EC2, because without it I would need to download all the graph data on my pc, and upload it on S3. Since I don't have a very powerfull bandwidth, it will be a lot easier to just download them with ec2 inside the datacenter, and move them with high-bandwidth connection to s3.
+Also, to keep things fast and cheap, I don't want to store them locally on the EC2 machine, but upload them directly to s3.
 
 So, let's start bottom up!
 
@@ -404,28 +438,34 @@ This is just a wrapper for `boto`, a python library to programmatically access S
 
 Apparently, the s3put program can't send data from stdin, so I needed another tool called s3cmd.
 
-    sudo yum install unzip python-pip -y && \
-    wget https://github.com/s3tools/s3cmd/archive/master.zip && \
-    unzip master.zip && \
-    cd s3cmd-master && \
-    sudo python setup.py install && \
-    cd .. && \
-    s3cmd --configure
+```shell
+sudo yum install unzip python-pip -y && \
+wget https://github.com/s3tools/s3cmd/archive/master.zip && \
+unzip master.zip && \
+cd s3cmd-master && \
+sudo python setup.py install && \
+cd .. && \
+s3cmd --configure
 
-    #Pipe example
-    # mysqldump ... | s3cmd put - s3://bucket/file-name.sql
-    #from: https://gist.github.com/viebig/a9109c8c75656e97888970871d386de0
+# Pipe example
+# mysqldump ... | s3cmd put - s3://bucket/file-name.sql
+# from: https://gist.github.com/viebig/a9109c8c75656e97888970871d386de0
+```
 
 After setting up the s3cmd command, we're ready to perform the wget. Before going further, I made another test.
 
 Since I'm moving a big load of files, I don't want to manage them again. Hadoop natively support gz files, so I tried to keep my code
 and use a gz file as argument. The program worked correctly, but I've noticed an output saying:
 
-    2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:1
+```shell
+2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:1
+```
 
 Running the program with a decompressed file, gave:
 
-    2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:66
+```shell
+2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:66
+```
 So basically it's not possible to split a big gzip file to be processed from multiple mappers. Since there are many files, and every file is 2GB in size (not that much for a normal machine) this should be fine.
 
 To upload the files directly without storing them, I'll need some piping mechanism that downloads the files and uploads them to s3.
@@ -440,18 +480,94 @@ which have:
 m3.xlarge
 8 vCPU, 15 GiB memory, 80 SSD GB storage
 
-After uploading my jar file on S3, it managed to run in 29 minutes (with cluster provisioning included).
+---
+## Results
+TODO: add running times
 
+### 1°
+After uploading my jar file on S3, it managed to run in 29 minutes (with cluster provisioning included).
 This let me run the first mapreduce task, the Distinct count problem:
- 
+
     159177414 distinct nodes
 
+### 2° outdegree distribution:
+[ Insert graph here ]
+You can find the details of the elements, in the outdegree-distribution csv.
+
+### 3° indegree distribution
+[ Insert graph here ]
+You can find the details of the elements, in the indegree-distribution csv.
+
+### 4° 10 nodes with maximum outdegree
+Here is the top 10. It may also be worth noticing that these same outdegrees, appear in the outdegree distribution, and they are the biggest outdegree nodes.
+1	(Node: <http://www.proteinontology.info/po.owl#A>, Outdegree: 1412709)
+2	(Node: <http://openean.kaufkauf.net/id/>, Outdegree: 895776)
+3	(Node: <http://products.semweb.bestbuy.com/company.rdf#BusinessEntity_BestBuy>, Outdegree: 827295)
+4	(Node: <http://sw.cyc.com/CycAnnotations_v1#externalID>, Outdegree: 492756)
+5	(Node: <http://purl.uniprot.org/citations/15685292>, Outdegree: 481000)
+6	(Node: <http://xmlns.com/foaf/0.1/Document>, Outdegree: 445426)
+7	(Node: <http://sw.cyc.com/CycAnnotations_v1#label>, Outdegree: 369567)
+8	(Node: <http://purl.org/dc/dcmitype/Text>, Outdegree: 362391)
+9	(Node: <http://sw.opencyc.org/concept/>, Outdegree: 357309)
+10	(Node: <http://purl.uniprot.org/citations/16973872>, Outdegree: 349988)
+
+### 5° Percentages
+
+* 464951010 (34%) has no subject
+* 464951010 (34%) has no object
+* 402056993 (30%) are blank nodes.
+    Total nodes: 1331959013
+
+
+### 6° Same Triple different contexts
+
+
+### 7° Remove duplicates
+I've included in the remove-duplicates directory, two files with the list of files (before and after) and their sizes.
+Here is a sum of their values:
+
+Before removing the duplicates we have:
+ > home/ec2-user/input/gz/ 321 Objects - 26.5 GB
+
+After removeing the duplicates, the dataset is shrinked by half:
+ > home/ec2-user/output/RemoveDuplicateTriples/ 76 Objects - 13.8 GB
+
+
+# Conclusions
+
+You don't want a dynamically typed language.
+You should remember to disable debug prints & logs.
+
+## Appendix A: The development environment
+
+To develop this project, I've used IntellijIdea as IDE, and Hadoop in local (standalone) mode as described [here](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SingleCluster.html#Standalone_Operation) and a Linux-based machine.
+
+With every run configuration, I've a couple of bash scripts in order to seamlessy run the various program:
+
+```bash
+mkdir /tmp/mapreduce-output/
+rm /tmp/mapreduce-output/
+mkdir /tmp/mapreduce-output
+```
+
+In order to work, Hadoop needs an clean output directory. In detail:
+
+* The first command create the mapreduce-output in tmp directory, which dosen't exists yet when I turn on my pc.
+* The second command removes the /tmp/mapreduce-output, which (usually) contains the output of the previous run. Without the first mkdir command, rm fails with an error (the directory dosent' exists). We can ignore this, but make programs happy is better in my opinion.
+* The third commands creates the /tmp/mapreduce-output, so it's ready to being used for the next run.
+
+I've setup the run configuration to run these commands every time I press "play" on the IDE.
+
+​	/home/isaacisback/dev/mapreduce/Project/assets/sample.txt /tmp/mapreduce-output /tmp/temp-mapreduce-output
 
 
 
-Here 
+ 
 
-# Appendix A: The regex for parsing the RDF graph
+
+
+## Appendix B: The regex for parsing the RDF graph
+
 In order to parse these hugh text files, I wrote a regex that hopefully should work well on the full dataset.
 
     (?<subject>\<[^\>]+\>|[a-zA-Z0-9\_\:]+) (?<predicate>\<[^\ ]+\>) (?<object>\<[^\>]+\>|\".*\"|[a-zA-Z0-9\_\:]+|\"[^\>]*\>) (?<source>\<[^\>]+\> )?\.
@@ -477,11 +593,10 @@ A simple Java program which uses this regex to parse a text file looks like this
         }
     }
 
-## Appendix B: Jobs chaining
-It was strange to me, to not find some straightforward/predefined way to chain multiple jobs. In order to achive this, I've developed a simple class `ponzi.federico.bdc.utils.JobsChainer` which lets me chain multiple jobs
-by using the output of the former, as an input for the latter.
+## Appendix C: Jobs chaining
+It was strange to me, to not find some straightforward/predefined way to chain multiple jobs. In order to achive this, I've created a simple class `ponzi.federico.bdc.utils.JobsChainer` which lets me chain multiple jobs by using the output of the former, as an input for the latter.
 
-It has a path for the input, a path for the output and a  variable length number of jobs to chain.
+It has a path for the input, a path for the output and a variable length number of jobs to chain.
 Chaining and running chained jobs is a simple as this:
 
     JobsChainer j = new JobsChainer(inputPath, outputPath, job, job2, job3, job4);

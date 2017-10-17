@@ -22,9 +22,9 @@ public class Percentages {
         private IntWritable blankSubjects;
         private IntWritable blankObjects;
         private IntWritable noContexts;
-        private IntWritable z = new IntWritable(0);
-        private IntWritable o = new IntWritable(1);
-        private IntWritable t = new IntWritable(2);
+        private IntWritable subjID = new IntWritable(0);
+        private IntWritable objID = new IntWritable(1);
+        private IntWritable contID = new IntWritable(2);
 
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
@@ -53,9 +53,9 @@ public class Percentages {
             blankSubjects.set(bS);
             noContexts.set(nC);
 
-            context.write(z, blankSubjects);
-            context.write(o, blankObjects);
-            context.write(t, noContexts);
+            context.write(subjID, blankSubjects);
+            context.write(objID, blankObjects);
+            context.write(contID, noContexts);
         }
     }
 
@@ -76,6 +76,7 @@ public class Percentages {
 
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
+
         Job job = Job.getInstance(conf, "word count");
         job.setJarByClass(Percentages.class);
         job.setMapperClass(TokenizerMapper.class);
