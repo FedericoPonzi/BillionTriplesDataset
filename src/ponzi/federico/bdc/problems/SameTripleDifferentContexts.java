@@ -191,9 +191,9 @@ public class SameTripleDifferentContexts
             String[] sp = value.toString().split("\n");
             for (String s : sp)
             {
-                String[] r = s.split("\t");
-
-                topK.add(new TripleNContextsTuple(r[0], r[1]));
+                String triple = s.substring(0, s.lastIndexOf("\t"));
+                String nContext = s.substring(s.lastIndexOf("\t")+1);
+                topK.add(new TripleNContextsTuple(triple, nContext));
 
                 if (topK.size() > K)
                 {

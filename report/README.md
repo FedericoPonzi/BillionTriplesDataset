@@ -484,21 +484,21 @@ m3.xlarge
 ## Results
 TODO: add running times
 
-### 1°
-After uploading my jar file on S3, it managed to run in 29 minutes (with cluster provisioning included).
-This let me run the first mapreduce task, the Distinct count problem:
+### 1° Distinct nodes:
+There are ```159177414``` distinct nodes
 
-    159177414 distinct nodes
+Running time: 21 minutes
 
 ### 2° outdegree distribution:
+
 [ Insert graph here ]
 You can find the details of the elements, in the outdegree-distribution csv.
 
-### 3° indegree distribution
+### 3° indegree distribution:
 [ Insert graph here ]
 You can find the details of the elements, in the indegree-distribution csv.
 
-### 4° 10 nodes with maximum outdegree
+### 4° 10 nodes with maximum outdegree:
 Here is the top 10. It may also be worth noticing that these same outdegrees, appear in the outdegree distribution, and they are the biggest outdegree nodes.
 1	(Node: <http://www.proteinontology.info/po.owl#A>, Outdegree: 1412709)
 2	(Node: <http://openean.kaufkauf.net/id/>, Outdegree: 895776)
@@ -511,7 +511,11 @@ Here is the top 10. It may also be worth noticing that these same outdegrees, ap
 9	(Node: <http://sw.opencyc.org/concept/>, Outdegree: 357309)
 10	(Node: <http://purl.uniprot.org/citations/16973872>, Outdegree: 349988)
 
-### 5° Percentages
+Running time: 20 minutes
+
+
+
+### 5° Percentages:
 
 * 464951010 (34%) has no subject
 * 464951010 (34%) has no object
@@ -519,24 +523,55 @@ Here is the top 10. It may also be worth noticing that these same outdegrees, ap
     Total nodes: 1331959013
 
 
-### 6° Same Triple different contexts
+Running time: 17 minutes
 
 
-### 7° Remove duplicates
+
+### 6° Same Triple different contexts:
+
+1	(Node: <http://sw.cyc.com/CycAnnotations_v1#label> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AnnotationProperty> ., Contexts: 123189)
+2	(Node: <http://sw.cyc.com/CycAnnotations_v1#externalID> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> ., Contexts: 123189)
+3	(Node: <http://sw.cyc.com/CycAnnotations_v1#externalID> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AnnotationProperty> ., Contexts: 123189)
+4	(Node: <http://xmlns.com/foaf/0.1/Person> <http://www.w3.org/2000/01/rdf-schema#label> "Person" ., Contexts: 124985)
+5	(Node: <http://www4.wiwiss.fu-berlin.de/is-group/resource/projects/Project10> <http://www.w3.org/2000/01/rdf-schema#label> "RDF Book Mashup" ., Contexts: 142253)
+6	(Node: <http://xmlns.com/foaf/0.1/Agent> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <http://dblp.l3s.de/d2r/sparql?query=DESCRIBE+%3Chttp://xmlns.com/foaf/0.1/Agent%3E> ., Contexts: 184522)
+7	(Node: <http://swrc.ontoware.org/ontology#InProceedings> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <http://dblp.l3s.de/d2r/sparql?query=DESCRIBE+%3Chttp://swrc.ontoware.org/ontology%23InProceedings%3E> ., Contexts: 254567)
+8	(Node: <http://purl.org/dc/dcmitype/Text> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <http://dblp.l3s.de/d2r/sparql?query=DESCRIBE+%3Chttp://purl.org/dc/dcmitype/Text%3E> ., Contexts: 361900)
+9	(Node: <http://xmlns.com/foaf/0.1/Document> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <http://dblp.l3s.de/d2r/sparql?query=DESCRIBE+%3Chttp://xmlns.com/foaf/0.1/Document%3E> ., Contexts: 366073)
+10	(Node: <http://products.semweb.bestbuy.com/company.rdf#BusinessEntity_BestBuy> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://purl.org/goodrelations/v1#BusinessEntity> ., Contexts: 413647)
+
+Running time: 42 minutes
+
+
+
+
+### 7° Remove duplicates:
 I've included in the remove-duplicates directory, two files with the list of files (before and after) and their sizes.
 Here is a sum of their values:
 
 Before removing the duplicates we have:
  > home/ec2-user/input/gz/ 321 Objects - 26.5 GB
 
-After removeing the duplicates, the dataset is shrinked by half:
+After removeing the duplicates, the dataset is shrinked almost half:
  > home/ec2-user/output/RemoveDuplicateTriples/ 76 Objects - 13.8 GB
 
+We should also notice that in the original input every node has a context while in the output anynode has a context.
 
-# Conclusions
 
-You don't want a dynamically typed language.
-You should remember to disable debug prints & logs.
+# Conclusion & lessons learned
+
+Some lesson learned after this project:
+
+* Tests everything: you have no way to be sure that your result is right. Also, you don't want a nasty runtime error after hours of computation (and multiple servers rent).
+* You don't want a dynamically typed language: Less possible runtime errors.
+* You *must* remember to disable useless debug prints:  You don't really want to bloat your logs with useless data.
+* Map-reduce is *powerful*, but hard to master: there are some must-know concepts behind it in order to achive efficient solutions. Also, there are some tricks that goes little behiond the basics that helps a lot to know. For example, the use of the cleanup method vs the use of a combiner.
+* Hadoop ecosystem is great: I loved how everything "just worked" without the need to pass in some tedious setup phase, or the need to know anything about its internals. I've just imported the library and everything worked!
+* Amazon EMR also is great: Again, I loved how everything "just worked". I've exported the jars from my project, uploaded them on Amazon S3, and run them like I would do on my pc - but It's run on a 20 nodes cluster.
+
+
+
+
 
 ## Appendix A: The development environment
 
@@ -558,7 +593,7 @@ In order to work, Hadoop needs an clean output directory. In detail:
 
 I've setup the run configuration to run these commands every time I press "play" on the IDE.
 
-​	/home/isaacisback/dev/mapreduce/Project/assets/sample.txt /tmp/mapreduce-output /tmp/temp-mapreduce-output
+```/home/isaacisback/dev/mapreduce/Project/assets/sample.txt /tmp/mapreduce-output /tmp/temp-mapreduce-output```
 
 
 
@@ -568,7 +603,7 @@ I've setup the run configuration to run these commands every time I press "play"
 
 ## Appendix B: The regex for parsing the RDF graph
 
-In order to parse these hugh text files, I wrote a regex that hopefully should work well on the full dataset.
+In order to parse these hugh text files, I wrote a regex that worked on a 2GB-subset (and hopefully should work well on the full dataset).
 
     (?<subject>\<[^\>]+\>|[a-zA-Z0-9\_\:]+) (?<predicate>\<[^\ ]+\>) (?<object>\<[^\>]+\>|\".*\"|[a-zA-Z0-9\_\:]+|\"[^\>]*\>) (?<source>\<[^\>]+\> )?\.
 
