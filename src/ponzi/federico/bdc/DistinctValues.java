@@ -2,7 +2,7 @@ package ponzi.federico.bdc;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -15,13 +15,14 @@ import java.util.StringTokenizer;
 
 /**
  * Created by Federico Ponzi
+ * http://informaticalab.com/
  */
-public class MyWordCount
+public class DistinctValues
 {
-    public static class TokenizerMapper
-        extends Mapper<Object, Text, Text, IntWritable>
+    public static class DistinctMapper
+        extends Mapper<Object, Text, Text, NullWritable>
     {
-        private static final IntWritable one = new IntWritable(1);
+        private static final NullWritable nill = NullWritable.get();
         private Text word = new Text();
 
         public void map(Object key, Text value, Context context)
@@ -30,37 +31,30 @@ public class MyWordCount
             while (itr.hasMoreTokens())
             {
                 word.set(itr.nextToken());
-                context.write(word, one);
+                context.write(word, nill);
             }
         }
     }
-    public static class IntSumReducer
-        extends Reducer<Text, IntWritable, Text, IntWritable>
+    public static class DistinctReducer
+        extends Reducer<Text, NullWritable, Text, NullWritable>
     {
-        private IntWritable result = new IntWritable();
-
-        public void reduce(Text key, Iterable<IntWritable> values,
+        private static final NullWritable nill = NullWritable.get();
+        public void reduce(Text key, Iterable<NullWritable> values,
             Context context
         ) throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
-            }
-            result.set(sum);
-            context.write(key, result);
+            context.write(key, nill);
         }
 
     }
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "word count");
+        Job job = Job.getInstance(conf, "Distinct values");
         job.setJarByClass(WordCount.class);
-        job.setMapperClass(TokenizerMapper.class);
-        job.setCombinerClass(IntSumReducer.class);
-        job.setReducerClass(IntSumReducer.class);
+        job.setMapperClass(DistinctMapper.class);
+        job.setReducerClass(DistinctReducer.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
-        String inputPath = "/home/isaacisback/dev/mapreduce/Project/assets/btc-2010-chunk-000";
+        job.setOutputValueClass(NullWritable.class);
+        String inputPath = args[0];
         FileInputFormat.addInputPath(job, new Path(inputPath));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
 

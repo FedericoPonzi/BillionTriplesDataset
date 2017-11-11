@@ -4,17 +4,15 @@ This report was made for my Big Data Computing Exam, held by [Prof. Irene Finocc
 
 The original Homework statement can be found [here](http://twiki.di.uniroma1.it/pub/BDC/WebHome/BigData-hw1-aa2016-2017.pdf).
 
-We were asked to do an analysis on a large RDF graph, called the [Billion Triple Dataset](http://km.aifb.kit.edu/projects/btc-2010/). In order to carry out the analysis, we had to study some MapReduce algorithm and their implementation.
+We were asked to do an analysis on a large RDF graph, called the [Billion Triple Dataset](http://km.aifb.kit.edu/projects/btc-2010/). In order to carry out the analysis, we had to study some MapReduce algorithms and their implementation. 
 
-While some tasks were based on widely used M/R patterns, the design and analysis on dataset of this size can be 
-
-
+[TOC]
 
 ## The development environemnt
 
 To develop this project, I've used IntellijIdea IDE, and Hadoop in local (standalone) mode as described [here](https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/SingleCluster.html#Standalone_Operation) with a Linux-based machine. I've made a run configuration for every problem that I had to solve, for faster debugging.
 
-With every run configuration, I've a couple of bash scripts in order to seamlessy run the various program:
+In order to work, Hadoop needs an clean output directory. For this reason, with every run configuration, I have a couple of bash scripts in order to seamlessy run the various program:
 
 ```bash
 mkdir /tmp/mapreduce-output/
@@ -22,11 +20,11 @@ rm /tmp/mapreduce-output/
 mkdir /tmp/mapreduce-output
 ```
 
-In order to work, Hadoop needs an clean output directory. In detail:
+In detail:
 
 - The first command create the mapreduce-output in tmp directory (which dosen't exists yet when I turn on my pc).
-- The second command removes the `/tmp/mapreduce-output`, which (usually) contains the output of the previous run. Without the first mkdir command, rm fails with an error (the directory dosent' exists). We can ignore this, but make programs happy is better in my opinion.
-- The third commands creates the `/tmp/mapreduce-output`, so it's ready to being used for the next run.
+- The second command removes the `/tmp/mapreduce-output`, which (usually) contains the output of the previous run. Without the first mkdir command, rm fails with an error (the directory dosent' exists).
+- The third commands creates the `/tmp/mapreduce-output`, so it's ready for the next run.
 
 I've setup the run configuration to run these commands every time I press "play" on the IDE.
 
@@ -42,12 +40,11 @@ And then, I was ready to working on the problems.
 
 ## 1 - Compute the number of distinct nodes and edges in the corresponding RDF graph.
 
-This is really a simple problem to start: just load the graph, and do a distinct on the nodes. To do that, we should do something like this:
+This is a simple problem, nice to get hands dirty with M/R:  load the graph, and do a distinct on the nodes. In pseudocode:
 
 ```python
 1 job:
 	map(object key, text val):
-		for each line in val:
 			emit(RDFStatement(val))
 	reduce(RDFStatement key, null):
 		emit(key)
@@ -67,7 +64,7 @@ cat btc-2010-chunk-000 | sed -e "s/\ .*//g"| sort -u | wc -l
 ```
 This command says: get the first colmun (the subject), sort, remove duplicates, count number of distincts results.
 
-Ok, We've missed the right count for about *7 thousand statements*. But why?
+I have missed the right count for about *7 thousand statements*. But why?
 
 Because I was counting distinct statements, not distinct subjects!
 
@@ -75,10 +72,9 @@ Updating the algorithm in order to count (and pass over) just the *subject* and 
 
 ```
 1 job:
-	map(object key, text val):
-		for each line in val:
-			emit(RDFStatement(val).subject, null)
-	reduce(string key, null):
+	map(object key, RDFStatement val):
+    	emit(RDFStatement(val).subject, null)
+	reduce(text key, null):
 		emit(key, null)
 ```
 
@@ -89,9 +85,7 @@ And then:
 
 Now it's much better!
 
-Moving on the count, in order to get just a *single number* as output, I've struggled a little with *job chaining*.
-
-In the end was really as simple as using as input for the latter job the output directory of the former job.
+Moving on the count, in order to get just a *single number* as output, I've struggled a little with *job chaining*. In the end was really as simple as using as input for the latter job the output directory of the former job. I've made a class to fasten the setup of the programs, described in Appendix B.
 
 To get a single number as output, I've been forced to setup 2 phases/jobs:
 
@@ -100,7 +94,7 @@ To get a single number as output, I've been forced to setup 2 phases/jobs:
 	map(object key, text val):
 		for each line in val:
 			emit(RDFStatement(val).subject, null)
-	reduce(string key, null):
+	reduce(text key, null):
 		emit(key, null)
 2 job:
     map(object key, text v)
@@ -124,7 +118,7 @@ For example:
     C -> link -> D
     D -> link -> A
     
-    A's out going links:
+    A's outgoing links:
     { A : [B, D], B: [],  C : [D] , D: [A]}
     A's incoming links:
     { A : [D], B : [A], C : [], D : [C]}
@@ -141,25 +135,25 @@ So let's start with the **outdegree** count:
         count = 0 #count the number of linked elements for this node.
         for el in values:
             count ++
-        emit(count, 1)
+        emit(count, null)
 ```
 Here we save on the filesystem a file like this:
 
-    A 1
-    A 1
-    A 1
+    2 # There is a node with indegree 2
+    2 # Another node has indegree 2
+    10 # This node has indegree 100
     ...
-We need to read again and then count the values.
+We then need a second job that counts the values:
 
 ```python
-2 phase: # This is just a count phase. we have like {d : {1 for every node with outdegree d}}
-    map(object key, text val):
+2 job:
+    map(object key, int val):
         emit(val, 1)
-    reduce (int key, text val): #{d: number of nodes with outdegree d}
+    reduce (int key, int val): # this is: {d: number of nodes with outdegree d}
         count = 0
         for el in values:
             c++
-        emit(key, c)
+        emit(key, c) # Indegree value - number of nodes with that degree
 ```
 
 ### Testing the implementation
@@ -203,7 +197,7 @@ First I've run the map-reduce jobs on this and got as output:
     3	6
     7	1
 
-Then, I've removed everything after the first space (easy task with a simple regex) from the file. Basically I've kept the source nodes.
+Then, I've removed everything after the first space from the file. Basically I've kept the source nodes.
 Then with `sort -u` (notice: I've substituted the long names with letters for readability):
 
       7 A
@@ -221,7 +215,7 @@ The indegree algorithm isn't much interesting because it's pretty much identical
 We just need to swap the key value for the first mapper:
 
 ```python
-1 phase:
+1 job:
     map(object key, text val)
         emit(val.object, val.subject)
     reduce(object key, text values):
@@ -229,7 +223,8 @@ We just need to swap the key value for the first mapper:
         for el in values:
             count ++
         emit(count, 1)
-2 phase: # This is just a count phase. we have like {d : {1 for every node with outdegree d}}
+2 job: # This is just a count phase. 
+       #we have like {d : {1 for every node with outdegree d}}
     map(object key, text val):
         emit(val, 1)
     reduce (int key, text val): #{d: number of nodes with outdegree d}
@@ -271,10 +266,10 @@ After searching some MR-Patterns, computing the top-k of something seems usually
 
 The problem with 2, is that we don't know in advance if the mappers output can fit on a single reducer. We should not assume that on our own.
 To overcome this scalability problem, we can use combiners. On every mapper, instead of emit out every resulted node, we just emit the first k nodes to a single reducer.
-The expected input size for the single reducer is the number_of_mappers * k, which should be much much smaller than the input of the mappers (or, at least, in our case).
+The expected input size for the single reducer is the number_of_mappers * k, which is very much smaller than the input of the mappers.
 
 ```python
-1 phase: # Count the number of outdegree per node
+1 job: # Count the number of outdegree per node
     map(object key, text val):
         emit(val.subject, val.object)
     reduce(object key, text values):
@@ -283,7 +278,7 @@ The expected input size for the single reducer is the number_of_mappers * k, whi
             count ++
         emit(count, 1)
 
-2 phase: # Get the top k
+2 job: # Get the top k
     map(object key, text val):
         Insert all elements in a ordered 10-sized list
     in cleanup phase: #ok this, is not a reducer but it's quite similar!
@@ -315,7 +310,8 @@ The second output was `l.size()` times the last inserted element. This is becaus
 
 
 ## 5 - Compute the percentage of triples with empty context, the percentage of triples whose subject is a blank node, and the percentage of triples whose object is a blank node
-In order to do this count, first we need to know if a node it's a blank node. In order to do this, I've added a couple of utility function inside RDFStatements. A blank node, it's a node which looks like this:
+In order to do this count, first we need to know if a node it's a blank node. In order to do this, I've added a couple of utility function inside RDFStatements. 
+A blank node, it's a node which looks like this:
 
     _:genid7xxhttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Fsparqlx3Fqueryx3DDESCRIBEx2Bx253chttpx3Ax2Fx2Fwwwx2Erdfaboutx2Ecomx2Frdfx2Fusgovx2Fcongressx2F106x2Fbillsx2Fh819x253e
 
@@ -323,7 +319,7 @@ The interesting thing is that they starts with "_:", so we can find them using t
 
 This said, find the number these percentage it's straightforward. We just need to iterate throught all the nodes and find these patterns.
 
-    1 Phase:
+    1 job:
         map(object key, text val):
             blankSubject = 0
             blankObject = 0
@@ -343,8 +339,13 @@ This said, find the number these percentage it's straightforward. We just need t
         reduce(object key, text values):
             emit(key, sum(values))
 
-In output, we get three keys: 0 is for the number of empty subjects, 1 is for the empty objects, 2 for the number of context-free rdf statements. From 1 we know the number of distinct nodes, so
-we just need to divide that number, the number of distinct nodes, with the number of blank subjects/blank objects/context-free statements.
+In output, we get three keys: 
+
+* `0` is for the number of empty subjects, 
+* `1` is for the empty objects, 
+* `2` for the number of context-free rdf statements. 
+
+From 1 we know the number of distinct nodes, so we just need to divide that number, the number of distinct nodes, with the number of blank subjects/blank objects/context-free statements.
 
 
 ## 7 - Remove duplicate triples (i.e., produce one or more output files in which triples have no context and each triple appears only once). How much does the dataset shrink? Consider the three input files as a unique dataset by summing up their sizes. Similarly for the output files.
@@ -377,7 +378,7 @@ Since diff had no output, it means there are no difference!
 After running the code on AWS, I've realized that I wasn't really removing duplicate triples. I've forgot to remove the context after loading the triple inside a RFDStatment Object.
 Also, another thing is: the cluster need to move a lot of data. I wasn't thinking of this while working on my local machine with the subset of the dataset. 
 
-My **input** on AWS is already gzipped, but I've added these few lines inside the config in order to have a gzipped output (it will also be easier to compare it with the gzipped input)
+My **input** on AWS is already gzipped, but I've added these few lines inside the config in order to have a gzipped **output** (it will also be easier to compare it with the gzipped input)
 
     conf.setBoolean("mapred.output.compress", true);
     conf.setClass("mapred.output.compression.codec", GzipCodec.class, CompressionCodec.class);
@@ -385,16 +386,15 @@ My **input** on AWS is already gzipped, but I've added these few lines inside th
 
 
 ## 6 - Each triple can appear with different contexts in the dataset. For each triple, compute the number of distinct contexts in which the triple appears (the empty context counts as 1). Report the 10 triples with the largest number of distinct contexts (break ties arbitrarily)
-*Please notice: I've put this 6th point as last, because I've solved the problems in this way. So It's easier to understand my design choices based on the prior ones. In particular, this problem is a "find top k" kind.*
-We know in advance that this computation will require a lot of time. The reason is that we need to use the triple as a key,
+*Please notice: I've put this problem as last, because I've solved the problems in this way.  It's easier to understand my design choices based on the prior ones. In particular, this problem is a "find top k" kind.*
+We know in advance that this computation will require much time. The reason is that we need to use the triple as a key,
 This means that we'll need to move around a *lot* of data.
-An optimization, would be to move a (possibly smaller) hash instead of the full triple but we can't because we need to report the top 10 nodes.
 
 To solve this problem, we will need 2 jobs:
 
-*   The first will compute the number of contexts per triple.
+*   The first job will compute the number of contexts per triple.
 
-*   The second job: while the first mapper will read from disk the output of the first reducer, the reducer will get the top k triples.
+*   The second job will read from disk the output of the previous job and get the top k triples.
 
 
 
@@ -402,7 +402,7 @@ In pseudocode:
 
     1 job:
     	map(Object key, Text val):
-        emit(<subject, predicate, object>, context)
+        	emit(<subject, predicate, object>, context)
             
         reduce(StatementsTriple k, List of contexts l):
         	count = l.size()
@@ -518,10 +518,26 @@ s3cmd --configure
 # from: https://gist.github.com/viebig/a9109c8c75656e97888970871d386de0
 ```
 
-After setting up the s3cmd command, we're ready to perform the wget. Before going further, I made another test.
+After setting up the `s3cmd` command, we're ready to perform the `wget`. 
 
-Since I'm moving a big load of files, I don't want to manage them again. Hadoop natively support gz files, so I tried to keep my code
-and use a gz file as argument. The program worked correctly, but I've noticed an output saying:
+Since I'm moving a big load of files, I don't want to handle them twice. 
+
+To upload the files directly without storing them, I'll need some piping mechanism that downloads the files and uploads them to s3.
+
+After some tries, this seems working fine:
+
+```bash
+cat 000-CONTENTS | while read line; do wget --quiet -O- $line | s3cmd put - s3://big-data-computing-exam-finocchi/home/ec2-user/input/gz/${line:41} ; done ;
+```
+
+Then I've used *Amazon EMR*, to create a 20 nodes cluster of m3.xlarge nodes, which have:
+
+* 8 vCPU,
+* 15 GiB memory, 
+* 80 SSD GB storage.
+
+After setting up everything, I've tested out the system. The files on S3 are gzipped. Hadoop natively support gz files, so I tried to keep my code as it is and use a gz file as argument. 
+The program worked correctly, but I've noticed a debug output saying:
 
 ```shell
 2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:1
@@ -532,22 +548,8 @@ Running the program with a decompressed file, gave:
 ```shell
 2017-10-10 15:38:24,651 INFO  [main] mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(200)) - number of splits:66
 ```
-So basically it's not possible to split a big gzip file to be processed from multiple mappers. Since there are many files, and every file is 2GB in size (not that much for a normal machine) this should be fine.
 
-To upload the files directly without storing them, I'll need some piping mechanism that downloads the files and uploads them to s3.
-
-After some tries, this seems working fine:
-
-
-```bash
-cat 000-CONTENTS | while read line; do wget --quiet -O- $line | s3cmd put - s3://big-data-computing-exam-finocchi/home/ec2-user/input/gz/${line:41} ; done ;
-```
-Then, I've used Amazon Emr, to create a 20 nodes cluster of m3.xlarge nodes,
-which have:
-m3.xlarge
-8 vCPU, 15 GiB memory, 80 SSD GB storage
-
-
+Basically it is not possible to split a big gzip file to be processed from multiple mappers. Since the dataset is already divided in many 2GB files (not that much for a normal machine, even less for the machines I'm going to use) it should be fine though.
 
 ---
 ## Results
@@ -559,33 +561,33 @@ There are ```159177414``` distinct nodes
 
 > Running time: 21 minutes
 
-### 2° outdegree distribution:
+### 2° Outdegree distribution:
 
 ![Outdegree distribution](charts/outdegree-distribution-chart.png)
 
-You can find the details of the elements, in the outdegree-distribution.csv file.
+You can find the details of the elements, in the outdegree-distribution.csv file. On top right, we can see that a lot of nodes, has a low number of outgoing links. As the degree level grows, there are less and less number of nodes with that degree, and from the graph it looks following a power law distribution.
 
 > Running time: 21 minutes
 
-### 3° indegree distribution:
+### 3° Indegree distribution:
 ![Indegree distribution](charts/indegree-distribution-chart.png)
-You can find the details of the elements, in the indegree-distribution.csv file.
+You can find the details of the elements, in the indegree-distribution.csv file. The considerations are similar to the precedent solution. This graph too, looks like a power law distribution.
 
 > Running time: 24 minutes.
 
 ### 4° 10 nodes with maximum outdegree:
-Here is the top 10. It may also be worth noticing that these same outdegrees, appear in the outdegree distribution, and they are the biggest outdegree nodes.
+Here is the top 10. It may also be worth noticing that these same outdegrees, appear in the outdegree-distribution.txt file, and they are the biggest outdegree nodes.
 
 1.  (Node: <http://www.proteinontology.info/po.owl#A>, Outdegree: 1412709)
-2. (Node: <http://openean.kaufkauf.net/id/>, Outdegree: 895776)
-3. (Node: <http://products.semweb.bestbuy.com/company.rdf#BusinessEntity_BestBuy>, Outdegree: 827295)
-4. (Node: <http://sw.cyc.com/CycAnnotations_v1#externalID>, Outdegree: 492756)
-5. (Node: <http://purl.uniprot.org/citations/15685292>, Outdegree: 481000)
-6. (Node: <http://xmlns.com/foaf/0.1/Document>, Outdegree: 445426)
-7. (Node: <http://sw.cyc.com/CycAnnotations_v1#label>, Outdegree: 369567)
-8. (Node: <http://purl.org/dc/dcmitype/Text>, Outdegree: 362391)
-9. (Node: <http://sw.opencyc.org/concept/>, Outdegree: 357309)
-10. (Node: <http://purl.uniprot.org/citations/16973872>, Outdegree: 349988)
+2.  (Node: <http://openean.kaufkauf.net/id/>, Outdegree: 895776)
+3.  (Node: <http://products.semweb.bestbuy.com/company.rdf#BusinessEntity_BestBuy>, Outdegree: 827295)
+4.  (Node: <http://sw.cyc.com/CycAnnotations_v1#externalID>, Outdegree: 492756)
+5.  (Node: <http://purl.uniprot.org/citations/15685292>, Outdegree: 481000)
+6.  (Node: <http://xmlns.com/foaf/0.1/Document>, Outdegree: 445426)
+7.  (Node: <http://sw.cyc.com/CycAnnotations_v1#label>, Outdegree: 369567)
+8.  (Node: <http://purl.org/dc/dcmitype/Text>, Outdegree: 362391)
+9.  (Node: <http://sw.opencyc.org/concept/>, Outdegree: 357309)
+10.  (Node: <http://purl.uniprot.org/citations/16973872>, Outdegree: 349988)
 
 >  Running time: 20 minutes
 
@@ -612,9 +614,7 @@ Here is the top 10. It may also be worth noticing that these same outdegrees, ap
 9. (Node: <http://xmlns.com/foaf/0.1/Document> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <http://dblp.l3s.de/d2r/sparql?query=DESCRIBE+%3Chttp://xmlns.com/foaf/0.1/Document%3E> ., Contexts: 366073)
 10. (Node: <http://products.semweb.bestbuy.com/company.rdf#BusinessEntity_BestBuy> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://purl.org/goodrelations/v1#BusinessEntity> ., Contexts: 413647)
 
-Running time: 42 minutes
-
-
+> Running time: 42 minutes
 
 
 ### 7° Remove duplicates:
@@ -624,45 +624,47 @@ Here is a sum of their values:
 Before removing the duplicates we have:
  > home/ec2-user/input/gz/ 321 Objects - 26.5 GB
 
-After removeing the duplicates, the dataset is shrinked by almost half:
- > home/ec2-user/output/RemoveDuplicateTriples/ 76 Objects - 13.8 GB
+After removing the duplicates, the dataset is shrinked by almost half:
+ > home/ec2-user/output/RemoveDuplicateTriplesProblem/ 76 Objects - 13.8 GB
 
 We should also notice that in the original input, every node has a context while in the output there are no contexts.
+
+> Running time: 38 minutes
 
 
 # Conclusion & lessons learned
 
 Some lesson learned after this project:
 
-* Tests everything: you have no way to be sure that your result is right. Also, you don't want a nasty runtime error after hours of computation (and multiple servers rent).
-* You don't want a dynamically typed language: Less possible runtime errors.
-* You *must* remember to disable (useless) debug prints:  You don't really want to bloat your logs with a lot of useless data.
-* Map-reduce is *powerful*, but hard to master: there are some must-know concepts behind it in order to achive efficient solutions. Also, there are some tricks that goes little behiond the basics that helps a lot to know. For example, the use of the cleanup method vs the use of a combiner.
-* Hadoop ecosystem is great: I loved how everything "just worked" without the need to pass in some tedious setup phase, or the need to know anything about its internals. I've just imported the library and everything worked!
-* Amazon EMR also is great: Again, I loved how everything "just worked". I've exported the jars from my project, uploaded them on Amazon S3, and run them like I would do on my pc - but It's run on a 20 nodes cluster.
-* The shuffle is very expensive: Most of the times, the difference between a job running for hours and a job running for minutes is in the amount of data passed between the phases. With the RDFStatement class, it was easy to parse the statement and passing the object between the various phases. Removing from the object the unused data, most of the time helped a lot with the execution time.
-* No real time computations: The M/R programs, are set to run in order of minutes/hours/days. This can be a bit weird sometimes, since usually we are used to programs and systems answering our queries in metter of milliseconds/seconds.
+* **Test everything, start small and scale**: you have no way to be sure that your results are right. Also, you don't want a nasty runtime error after hours of computation (and multiple servers rent).
+* **You don't want a dynamically typed language**: Less possible runtime errors.
+* **You *must* remember to disable (useless) debug prints:**  You don't really want to bloat your logs with a lot of useless data.
+* **Map-reduce is *powerful*, but hard to master**: there are some must-know concepts behind it in order to achive efficient solutions. Also, there are some tricks that goes little behiond the basics that helps a lot to know. For example, the use of the cleanup method vs the use of a combiner.
+* **Hadoop ecosystem is great**: I loved how everything "just worked" without the need to pass in some tedious setup phase, or the need to know anything about its internals. I've just imported the library and everything worked!
+* **Amazon EMR also is great**: Again, I loved how everything "just worked". I've exported the jars from my project, uploaded them on Amazon S3, and run them like I would do on my pc - but It is running on a 20 nodes cluster.
+* **The shuffle is very expensive**: Most of the times, the difference between a job running for hours and a job running for minutes is in the amount of data passed between the phases. With the RDFStatement class, it was easy to parse the statement and passing the object between the various phases. Removing from the object the unused data, most of the time helped a lot with the execution time.
+* **No real time computations**: The M/R programs, are set to run in order of minutes/hours/days. This can be a bit weird sometimes, since usually we are used to programs and systems answering our queries in metter of milliseconds/seconds.
+* **Gzip all the things**: Gzip is great, reduces the size of data needed to be transfered so it should probably always used in production systems.
 
 
 ### Some statistics about the costs
 
-I had a good amount of credits that helped carry out these analysis for free. I've rent 20 servers for about **14 hours** (wall-clock time) in total, for 21 runs. Many of them didn't even start running because of validation errors (configuration errors). The longest run was 5 hours and 9 minutes: TopKOutdegree had a bug, and was taking a lot of time.
+I had a good amount of credits that let me carry out these analysis for free. I've rent 20 servers for about **14 hours** (wall-clock time) in total, for 21 runs. Many of them didn't even start running because of validation errors (configuration errors). The longest run was 5 hours and 9 minutes: TopKOutdegree program had a bug, and was taking a lot of time.
 
-For all of this, I paid $75.70:
+For all of this, I paid `$75.70`:
 
 * **EC2**: $0.266 per On Demand Linux m3.xlarge Instance Hour: I've run them for 229.151 Hrs. So in total: \$ 60.95. 
 * **EMR**: $0.07 per hour for EMR m3.xlarge. I've used190.938 Hrs. So in total:\$ 13.37
 * **S3**: $0.023 per GB - first 50 TB / month of storage. I've used 34.298 GB-Mo. So in total: \$0.79
 
-As you can see, the biggest cost was in the renting of the virutal servers. A more advanced user, may want to try to use the best compromise between costs and running time. 
+As you can see, the biggest cost was in the rent of the virutal servers. A more advanced user, may want to try to use the best compromise between costs and running time. 
 
 ## Appendix A: The regex for parsing the RDF graph
 
 In order to parse these hugh text files, I wrote a regex that worked on a 2GB-subset (and hopefully should work well on the full dataset).
 
     (?<subject>\<[^\>]+\>|[a-zA-Z0-9\_\:]+) (?<predicate>\<[^\ ]+\>) (?<object>\<[^\>]+\>|\".*\"|[a-zA-Z0-9\_\:]+|\"[^\>]*\>) (?<source>\<[^\>]+\> )?\.
-
-There are 4 capturing groups. One for each element of a statement. The source group which is the context of the statement, it's optional.
+There are 4 capturing groups. One for each element of a statement. The source group which is the context of the statement, it's optional. Every statement ends with a space and and a dot.
 
 A simple Java program which uses this regex to parse a text file looks like this:
 
