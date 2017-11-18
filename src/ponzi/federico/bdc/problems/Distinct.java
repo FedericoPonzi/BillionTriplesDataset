@@ -106,22 +106,9 @@ public class Distinct
         job2.setOutputValueClass(IntWritable.class);
 
         String inPath = args[0];
-        //inPath = "/home/isaacisback/dev/mapreduce/Project/assets/btc-2010-chunk-000";
         JobsChainer j = new JobsChainer(inPath, args[1], job, job2);
         j.waitForCompletion();
 
-    /*    FileInputFormat.addInputPath(job, new Path(inPath));
-        FileOutputFormat.setOutputPath(job, new Path(args[2]));
-        FileInputFormat.addInputPath(job2, new Path(args[2]));
-        FileOutputFormat.setOutputPath(job2, new Path(args[1]) );
-        if(job.waitForCompletion(true))
-        {
-            if(job2.waitForCompletion(true))
-            {
-                System.exit(0);
-            }
-        }
-        System.exit(1);*/
     }
 }
 
