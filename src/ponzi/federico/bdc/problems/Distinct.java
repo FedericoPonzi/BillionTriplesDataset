@@ -11,7 +11,6 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import ponzi.federico.bdc.utils.JobsChainer;
 import ponzi.federico.bdc.utils.RDFStatement;
-import ponzi.federico.bdc.WordCount;
 
 import java.io.IOException;
 
@@ -92,14 +91,14 @@ public class Distinct
         Configuration conf = new Configuration();
 
         Job job = Job.getInstance(conf, "distinct");
-        job.setJarByClass(WordCount.class);
+        job.setJarByClass(Distinct.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setReducerClass(DistinctReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(NullWritable.class);
 
         Job job2 = Job.getInstance(conf, "distinct count");
-        job2.setJarByClass(WordCount.class);
+        job2.setJarByClass(Distinct.class);
         job2.setMapperClass(CountMapper.class);
         job2.setReducerClass(PrintReducer.class);
         job2.setOutputKeyClass(IntWritable.class);

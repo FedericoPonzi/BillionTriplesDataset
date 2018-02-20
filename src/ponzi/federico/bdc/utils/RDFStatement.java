@@ -138,7 +138,7 @@ public class RDFStatement implements WritableComparable<RDFStatement>
     }
     @Override public String toString()
     {
-        return String.format("%s %s %s %s.", subject,predicate,object, context);
+        return String.format("%s %s %s %s .", subject,predicate,object, context);
     }
 
     public Text getSubject()
